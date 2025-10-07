@@ -18,4 +18,6 @@ From root folder :
 bun run dev
 ```
 
-
+If there are errors in sending message , 
+Run 
+cd Whatsapp-Automation-Tool ;bun update whatsapp-web.js

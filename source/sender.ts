@@ -46,9 +46,17 @@ export async function sendDocumentToContacts({
       continue;
     }
 
-    const chatId = `${cleanPhone}@c.us`;
-
     try {
+      // Check if number is registered on WhatsApp
+      const numberId = await client.getNumberId(cleanPhone);
+      
+      if (!numberId || !numberId._serialized) {
+        console.warn(`⚠️ ${contact.name} (${cleanPhone}) is not registered on WhatsApp - skipping`);
+        continue;
+      }
+      
+      const chatId = numberId._serialized;
+      
       await client.sendMessage(chatId, media);
       console.log(`✅ Sent document to ${contact.name} (${cleanPhone})`);
       await new Promise((res) => setTimeout(res, delay));

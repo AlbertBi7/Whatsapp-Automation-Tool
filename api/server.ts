@@ -166,14 +166,30 @@ io.on('connection', (socket) => {
 // API Routes
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  // Import isClientReady to check actual WhatsApp status
+  const { isClientReady } = await import('../source/client');
+  
+  // Determine WhatsApp status
+  const globalStatus = (global as any).whatsappStatus || 'disconnected';
+  const isReady = await isClientReady();
+  
+  let whatsappStatus = 'disconnected';
+  if (isReady) {
+    whatsappStatus = 'ready';
+  } else if (globalStatus === 'qr_ready') {
+    whatsappStatus = 'awaiting_qr_scan';
+  } else if (globalStatus === 'authenticated' || globalStatus === 'initializing') {
+    whatsappStatus = 'connecting';
+  }
+  
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
     services: {
       api: 'running',
       websocket: 'running',
-      whatsapp: 'available'
+      whatsapp: whatsappStatus
     }
   });
 });
@@ -722,7 +738,7 @@ async function processDirectBroadcast(campaignId: string, message: string, conta
     const { client, waitForClient, isClientReady } = await import('../source/client');
     
     // Wait for client to be ready before proceeding
-    if (!isClientReady()) {
+    if (!(await isClientReady())) {
       console.log('⏳ WhatsApp client not ready, waiting...');
       await waitForClient(60000); // Wait up to 60 seconds
     }
@@ -751,7 +767,17 @@ async function processDirectBroadcast(campaignId: string, message: string, conta
           continue;
         }
         
-        const chatId = cleanPhone + "@c.us";
+        // Check if number is registered on WhatsApp
+        const numberId = await client.getNumberId(cleanPhone);
+        
+        if (!numberId || !numberId._serialized) {
+          campaign.progress.failed++;
+          campaign.progress.errors.push(`${contact.name}'s number (${contact.phone}) is not registered on WhatsApp`);
+          console.log(`❌ ${contact.name} (${cleanPhone}) is not on WhatsApp`);
+          continue;
+        }
+        
+        const chatId = numberId._serialized;
         
         // Replace message variables
         const personalizedMessage = message
@@ -761,7 +787,7 @@ async function processDirectBroadcast(campaignId: string, message: string, conta
           .replace(/\{\{branch\}\}/g, contact.branch || 'N/A');
         
         // Check if client is still ready before sending
-        if (!isClientReady()) {
+        if (!(await isClientReady())) {
           throw new Error('WhatsApp client disconnected during broadcast');
         }
         
@@ -847,7 +873,7 @@ broadcastQueue.process('send-broadcast', async (job) => {
   const { client, waitForClient, isClientReady } = await import('../source/client');
   
   // Wait for client to be ready before proceeding
-  if (!isClientReady()) {
+  if (!(await isClientReady())) {
     console.log('⏳ WhatsApp client not ready, waiting...');
     await waitForClient(60000); // Wait up to 60 seconds
   }
@@ -876,7 +902,17 @@ broadcastQueue.process('send-broadcast', async (job) => {
         continue;
       }
       
-      const chatId = cleanPhone + "@c.us";
+      // Check if number is registered on WhatsApp
+      const numberId = await client.getNumberId(cleanPhone);
+      
+      if (!numberId || !numberId._serialized) {
+        campaign.progress.failed++;
+        campaign.progress.errors.push(`${contact.name}'s number (${contact.phone}) is not registered on WhatsApp`);
+        console.log(`❌ ${contact.name} (${cleanPhone}) is not on WhatsApp`);
+        continue;
+      }
+      
+      const chatId = numberId._serialized;
       
       // Replace message variables
       const personalizedMessage = message
@@ -886,7 +922,7 @@ broadcastQueue.process('send-broadcast', async (job) => {
         .replace(/\{\{branch\}\}/g, contact.branch || 'N/A');
       
       // Check if client is still ready before sending
-      if (!isClientReady()) {
+      if (!(await isClientReady())) {
         throw new Error('WhatsApp client disconnected during broadcast');
       }
       

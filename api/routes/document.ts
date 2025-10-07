@@ -78,7 +78,7 @@ router.post('/upload-document', (req, res) => {
         return res.status(400).json({ success: false, message: 'No contacts matched the filters' });
       }
 
-      if (!isClientReady()) {
+      if (!(await isClientReady())) {
         await waitForClient(60000);
       }
       

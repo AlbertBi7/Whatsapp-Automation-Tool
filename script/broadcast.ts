@@ -66,7 +66,16 @@ client.once("ready", () => {
                     return;
                 }
                 
-                const chatId = cleanPhone + "@c.us";
+                // Check if number is registered on WhatsApp
+                const numberId = await client.getNumberId(cleanPhone);
+                
+                if (!numberId || !numberId._serialized) {
+                    console.log(`${i + 1}. ⚠️  ${name} (${cleanPhone}) is not registered on WhatsApp - Skipping`);
+                    messagesSkipped++;
+                    return;
+                }
+                
+                const chatId = numberId._serialized;
                 
                 console.log(`${i + 1}. Sending to ${name} - ${cleanPhone} (${assignedRole || 'unknown'})...`);
                 

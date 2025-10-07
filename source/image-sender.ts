@@ -15,7 +15,15 @@ export async function sendImageToWhatsApp(phoneNumber: string, imagePath: string
   if (cleanPhone.length === 10) {
     cleanPhone = '91' + cleanPhone; // Default to India if only 10 digits
   }
-  const chatId = `${cleanPhone}@c.us`;
+  
+  // Check if number is registered on WhatsApp
+  const numberId = await client.getNumberId(cleanPhone);
+  
+  if (!numberId || !numberId._serialized) {
+    throw new Error(`Phone number ${cleanPhone} is not registered on WhatsApp`);
+  }
+  
+  const chatId = numberId._serialized;
 
   // Read image file and create MessageMedia
   const resolvedPath = path.resolve(imagePath);

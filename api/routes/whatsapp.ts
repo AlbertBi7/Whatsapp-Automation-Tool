@@ -246,7 +246,7 @@ router.post('/broadcast', imageUpload.single('image'), async (req, res) => {
         error: 'Missing required fields: message and campaignName' 
       });
     }
-    if (!isClientReady()) {
+    if (!(await isClientReady())) {
       return res.status(400).json({ 
         error: 'WhatsApp client is not ready. Please ensure WhatsApp is connected and authenticated.' 
       });
@@ -320,7 +320,7 @@ async function processRealBroadcast(campaignId: string, message: string, contact
   }
   console.log(`🚀 Starting REAL broadcast for campaign ${campaignId} with ${contacts.length} contacts`);
   try {
-    if (!isClientReady()) {
+    if (!(await isClientReady())) {
       console.log('⏳ WhatsApp client not ready, waiting...');
       await waitForClient(60000);
     }
@@ -359,7 +359,22 @@ async function processRealBroadcast(campaignId: string, message: string, contact
           console.log(`❌ Invalid phone number for ${contact.name}: ${contact.phone}`);
           continue;
         }
-        const chatId = cleanPhone + "@c.us";
+        // Check if number is registered on WhatsApp
+        const numberId = await client.getNumberId(cleanPhone);
+        
+        if (!numberId || !numberId._serialized) {
+          campaign.progress.failed++;
+          campaign.progress.errors.push(`${contact.name}'s number (${contact.phone}) is not registered on WhatsApp`);
+          if (recipient) {
+            recipient.status = 'failed';
+            recipient.error = 'Number not registered on WhatsApp';
+            recipient.timestamp = new Date().toISOString();
+          }
+          console.log(`❌ ${contact.name} (${cleanPhone}) is not on WhatsApp`);
+          continue;
+        }
+        
+        const chatId = numberId._serialized;
         const personalizedMessage = message
           .replace(/\{\{name\}\}/g, contact.name || 'there')
           .replace(/\{\{role\}\}/g, contact.assignedRole || contact.role || 'participant')
@@ -367,7 +382,7 @@ async function processRealBroadcast(campaignId: string, message: string, contact
           .replace(/\{\{branch\}\}/g, contact.branch || 'N/A')
           .replace(/\{\{year\}\}/g, contact.year || 'N/A')
           .replace(/\{\{email\}\}/g, contact.email || 'N/A');
-        if (!isClientReady()) {
+        if (!(await isClientReady())) {
           throw new Error('WhatsApp client disconnected during broadcast');
         }
         console.log(`📱 Sending to ${contact.name} (${cleanPhone})...`);
